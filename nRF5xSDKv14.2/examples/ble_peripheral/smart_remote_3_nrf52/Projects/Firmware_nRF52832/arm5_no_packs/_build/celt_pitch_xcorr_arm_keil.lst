@@ -1,0 +1,876 @@
+
+
+
+ARM Macro Assembler    Page 1 
+
+
+    1 00000000         #line   1                "..\\..\\..\\Source\\Libraries\
+\opus-1.2.1\\arm\\celt_pitch_xcorr_arm_keil.s"
+    1 00000000         ; Copyright (c) 2007-2008 CSIRO
+    2 00000000         ; Copyright (c) 2007-2009 Xiph.Org Foundation
+    3 00000000         ; Copyright (c) 2013      Parrot
+    4 00000000         ; Written by Aurélien Zanelli
+    5 00000000         ;
+    6 00000000         ; Redistribution and use in source and binary forms, wit
+                       h or without
+    7 00000000         ; modification, are permitted provided that the followin
+                       g conditions
+    8 00000000         ; are met:
+    9 00000000         ;
+   10 00000000         ; - Redistributions of source code must retain the above
+                        copyright
+   11 00000000         ; notice, this list of conditions and the following disc
+                       laimer.
+   12 00000000         ;
+   13 00000000         ; - Redistributions in binary form must reproduce the ab
+                       ove copyright
+   14 00000000         ; notice, this list of conditions and the following disc
+                       laimer in the
+   15 00000000         ; documentation and/or other materials provided with the
+                        distribution.
+   16 00000000         ;
+   17 00000000         ; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+                        CONTRIBUTORS
+   18 00000000         ; ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLU
+                       DING, BUT NOT
+   19 00000000         ; LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY 
+                       AND FITNESS FOR
+   20 00000000         ; A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+                        THE COPYRIGHT OWNER
+   21 00000000         ; OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, IN
+                       CIDENTAL, SPECIAL,
+   22 00000000         ; EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NO
+                       T LIMITED TO,
+   23 00000000         ; PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF U
+                       SE, DATA, OR
+   24 00000000         ; PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND 
+                       ON ANY THEORY OF
+   25 00000000         ; LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR T
+                       ORT (INCLUDING
+   26 00000000         ; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+                        USE OF THIS
+   27 00000000         ; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH D
+                       AMAGE.
+   28 00000000         
+   29 00000000                 AREA             |.text|, CODE, READONLY
+   30 00000000         
+   31 00000000                 EXPORT           celt_pitch_xcorr_edsp
+   32 00000000         
+   33 00000000         xcorr_kernel_edsp
+                               PROC
+   34 00000000         xcorr_kernel_edsp_start
+   35 00000000         
+   36 00000000         ; input:
+   37 00000000         ;   r3      = int         len
+   38 00000000         ;   r4      = opus_val16 *_x (must be 32-bit aligned)
+
+
+
+ARM Macro Assembler    Page 2 
+
+
+   39 00000000         ;   r5      = opus_val16 *_y (must be 32-bit aligned)
+   40 00000000         ;   r6...r9 = opus_val32  sum[4]
+   41 00000000         ; output:
+   42 00000000         ;   r6...r9 = opus_val32  sum[4]
+   43 00000000         ; preserved: r0-r5
+   44 00000000         ; internal usage
+   45 00000000         ;   r2      = int         j
+   46 00000000         ;   r12,r14 = opus_val16  x[4]
+   47 00000000         ;   r10,r11 = opus_val16  y[4]
+   48 00000000         
+   49 00000000 B534            STMFD            sp!, {r2,r4,r5,lr}
+   50 00000002 F855 AB04       LDR              r10, [r5], #4 ; Load y[0...1]
+   51 00000006 1F1A            SUBS             r2, r3, #4  ; j = len-4
+   52 00000008 F855 BB04       LDR              r11, [r5], #4 ; Load y[2...3]
+   53 0000000C DD2C            BLE              xcorr_kernel_edsp_process4_done
+   54 0000000E F854 CB04       LDR              r12, [r4], #4 ; Load x[0...1]
+   55 00000012         ; Stall
+   56 00000012         xcorr_kernel_edsp_process4
+   57 00000012         ; The multiplies must issue from pipeline 0, and can't d
+                       ual-issue with each
+   58 00000012         ; other. Every other instruction here dual-issues with a
+                        multiply, and is
+   59 00000012         ; thus "free". There should be no stalls in the body of 
+                       the loop.
+   60 00000012 FB1C 660A       SMLABB           r6, r12, r10, r6 ; sum[0] = MAC
+                                                            16_16(sum[0],x_0,y_
+                                                            0)
+   61 00000016 F854 EB04       LDR              r14, [r4], #4 ; Load x[2...3]
+   62 0000001A FB1C 771A       SMLABT           r7, r12, r10, r7 ; sum[1] = MAC
+                                                            16_16(sum[1],x_0,y_
+                                                            1)
+   63 0000001E 1F12            SUBS             r2, r2, #4  ; j-=4
+   64 00000020 FB1C 880B       SMLABB           r8, r12, r11, r8 ; sum[2] = MAC
+                                                            16_16(sum[2],x_0,y_
+                                                            2)
+   65 00000024 FB1C 991B       SMLABT           r9, r12, r11, r9 ; sum[3] = MAC
+                                                            16_16(sum[3],x_0,y_
+                                                            3)
+   66 00000028 FB1C 663A       SMLATT           r6, r12, r10, r6 ; sum[0] = MAC
+                                                            16_16(sum[0],x_1,y_
+                                                            1)
+   67 0000002C F855 AB04       LDR              r10, [r5], #4 ; Load y[4...5]
+   68 00000030 FB1C 772B       SMLATB           r7, r12, r11, r7 ; sum[1] = MAC
+                                                            16_16(sum[1],x_1,y_
+                                                            2)
+   69 00000034 FB1C 883B       SMLATT           r8, r12, r11, r8 ; sum[2] = MAC
+                                                            16_16(sum[2],x_1,y_
+                                                            3)
+   70 00000038 FB1C 992A       SMLATB           r9, r12, r10, r9 ; sum[3] = MAC
+                                                            16_16(sum[3],x_1,y_
+                                                            4)
+   71 0000003C BFC8 F854 
+              CB04             LDRGT            r12, [r4], #4 ; Load x[0...1]
+   72 00000042 FB1E 660B       SMLABB           r6, r14, r11, r6 ; sum[0] = MAC
+                                                            16_16(sum[0],x_2,y_
+                                                            2)
+   73 00000046 FB1E 771B       SMLABT           r7, r14, r11, r7 ; sum[1] = MAC
+                                                            16_16(sum[1],x_2,y_
+                                                            3)
+
+
+
+ARM Macro Assembler    Page 3 
+
+
+   74 0000004A FB1E 880A       SMLABB           r8, r14, r10, r8 ; sum[2] = MAC
+                                                            16_16(sum[2],x_2,y_
+                                                            4)
+   75 0000004E FB1E 991A       SMLABT           r9, r14, r10, r9 ; sum[3] = MAC
+                                                            16_16(sum[3],x_2,y_
+                                                            5)
+   76 00000052 FB1E 663B       SMLATT           r6, r14, r11, r6 ; sum[0] = MAC
+                                                            16_16(sum[0],x_3,y_
+                                                            3)
+   77 00000056 F855 BB04       LDR              r11, [r5], #4 ; Load y[6...7]
+   78 0000005A FB1E 772A       SMLATB           r7, r14, r10, r7 ; sum[1] = MAC
+                                                            16_16(sum[1],x_3,y_
+                                                            4)
+   79 0000005E FB1E 883A       SMLATT           r8, r14, r10, r8 ; sum[2] = MAC
+                                                            16_16(sum[2],x_3,y_
+                                                            5)
+   80 00000062 FB1E 992B       SMLATB           r9, r14, r11, r9 ; sum[3] = MAC
+                                                            16_16(sum[3],x_3,y_
+                                                            6)
+   81 00000066 DCD4            BGT              xcorr_kernel_edsp_process4
+   82 00000068         xcorr_kernel_edsp_process4_done
+   83 00000068 1D12            ADDS             r2, r2, #4
+   84 0000006A DD36            BLE              xcorr_kernel_edsp_done
+   85 0000006C F834 CB02       LDRH             r12, [r4], #2 ; r12 = *x++
+   86 00000070 1E52            SUBS             r2, r2, #1  ; j--
+   87 00000072         ; Stall
+   88 00000072 FB1C 660A       SMLABB           r6, r12, r10, r6 ; sum[0] = MAC
+                                                            16_16(sum[0],x,y_0)
+                                                            
+   89 00000076 BFC8 F834 
+              EB02             LDRHGT           r14, [r4], #2 ; r14 = *x++
+   90 0000007C FB1C 771A       SMLABT           r7, r12, r10, r7 ; sum[1] = MAC
+                                                            16_16(sum[1],x,y_1)
+                                                            
+   91 00000080 FB1C 880B       SMLABB           r8, r12, r11, r8 ; sum[2] = MAC
+                                                            16_16(sum[2],x,y_2)
+                                                            
+   92 00000084 FB1C 991B       SMLABT           r9, r12, r11, r9 ; sum[3] = MAC
+                                                            16_16(sum[3],x,y_3)
+                                                            
+   93 00000088 DD27            BLE              xcorr_kernel_edsp_done
+   94 0000008A FB1E 661A       SMLABT           r6, r14, r10, r6 ; sum[0] = MAC
+                                                            16_16(sum[0],x,y_1)
+                                                            
+   95 0000008E 1E52            SUBS             r2, r2, #1  ; j--
+   96 00000090 FB1E 770B       SMLABB           r7, r14, r11, r7 ; sum[1] = MAC
+                                                            16_16(sum[1],x,y_2)
+                                                            
+   97 00000094 F835 AB02       LDRH             r10, [r5], #2 
+                                                            ; r10 = y_4 = *y++
+   98 00000098 FB1E 881B       SMLABT           r8, r14, r11, r8 ; sum[2] = MAC
+                                                            16_16(sum[2],x,y_3)
+                                                            
+   99 0000009C BFC8 F834 
+              CB02             LDRHGT           r12, [r4], #2 ; r12 = *x++
+  100 000000A2 FB1E 990A       SMLABB           r9, r14, r10, r9 ; sum[3] = MAC
+                                                            16_16(sum[3],x,y_4)
+                                                            
+  101 000000A6 DD18            BLE              xcorr_kernel_edsp_done
+
+
+
+ARM Macro Assembler    Page 4 
+
+
+  102 000000A8 FB1C 660B       SMLABB           r6, r12, r11, r6 ; sum[0] = MAC
+                                                            16_16(sum[0],tmp,y_
+                                                            2)
+  103 000000AC 2A01            CMP              r2, #1      ; j--
+  104 000000AE FB1C 771B       SMLABT           r7, r12, r11, r7 ; sum[1] = MAC
+                                                            16_16(sum[1],tmp,y_
+                                                            3)
+  105 000000B2 F835 2B02       LDRH             r2, [r5], #2 ; r2 = y_5 = *y++
+  106 000000B6 FB1C 880A       SMLABB           r8, r12, r10, r8 ; sum[2] = MAC
+                                                            16_16(sum[2],tmp,y_
+                                                            4)
+  107 000000BA BFC8 F8B4 
+              E000             LDRHGT           r14, [r4]   ; r14 = *x
+  108 000000C0 FB1C 9902       SMLABB           r9, r12, r2, r9 ; sum[3] = MAC1
+                                                            6_16(sum[3],tmp,y_5
+                                                            )
+  109 000000C4 DD09            BLE              xcorr_kernel_edsp_done
+  110 000000C6 FB1E 661B       SMLABT           r6, r14, r11, r6 ; sum[0] = MAC
+                                                            16_16(sum[0],tmp,y_
+                                                            3)
+  111 000000CA F8B5 B000       LDRH             r11, [r5]   ; r11 = y_6 = *y
+  112 000000CE FB1E 770A       SMLABB           r7, r14, r10, r7 ; sum[1] = MAC
+                                                            16_16(sum[1],tmp,y_
+                                                            4)
+  113 000000D2 FB1E 8802       SMLABB           r8, r14, r2, r8 ; sum[2] = MAC1
+                                                            6_16(sum[2],tmp,y_5
+                                                            )
+  114 000000D6 FB1E 990B       SMLABB           r9, r14, r11, r9 ; sum[3] = MAC
+                                                            16_16(sum[3],tmp,y_
+                                                            6)
+  115 000000DA         xcorr_kernel_edsp_done
+  116 000000DA BD34            LDMFD            sp!, {r2,r4,r5,pc}
+  117 000000DC                 ENDP
+  118 000000DC         
+  119 000000DC         celt_pitch_xcorr_edsp
+                               PROC
+  120 000000DC         
+  121 000000DC         ; input:
+  122 000000DC         ;   r0  = opus_val16 *_x (must be 32-bit aligned)
+  123 000000DC         ;   r1  = opus_val16 *_y (only needs to be 16-bit aligne
+                       d)
+  124 000000DC         ;   r2  = opus_val32 *xcorr
+  125 000000DC         ;   r3  = int         len
+  126 000000DC         ; output:
+  127 000000DC         ;   r0  = maxcorr
+  128 000000DC         ; internal usage
+  129 000000DC         ;   r4  = opus_val16 *x
+  130 000000DC         ;   r5  = opus_val16 *y
+  131 000000DC         ;   r6  = opus_val32  sum0
+  132 000000DC         ;   r7  = opus_val32  sum1
+  133 000000DC         ;   r8  = opus_val32  sum2
+  134 000000DC         ;   r9  = opus_val32  sum3
+  135 000000DC         ;   r1  = int         max_pitch
+  136 000000DC         ;   r12 = int         j
+  137 000000DC         ; ignored:
+  138 000000DC         ;         int         arch
+  139 000000DC         
+  140 000000DC E92D 4FF0       STMFD            sp!, {r4-r11, lr}
+  141 000000E0 460D            MOV              r5, r1
+
+
+
+ARM Macro Assembler    Page 5 
+
+
+  142 000000E2 9909            LDR              r1, [sp, #36]
+  143 000000E4 4604            MOV              r4, r0
+  144 000000E6 F015 0F03       TST              r5, #3
+  145 000000EA         ; maxcorr = 1
+  146 000000EA F04F 0001       MOV              r0, #1
+  147 000000EE D03B            BEQ              celt_pitch_xcorr_edsp_process1u
+_done
+  148 000000F0         ; Compute one sum at the start to make y 32-bit aligned.
+                       
+  149 000000F0 F1B3 0C04       SUBS             r12, r3, #4
+  150 000000F4         ; r14 = sum = 0
+  151 000000F4 F04F 0E00       MOV              r14, #0
+  152 000000F8 F835 8B02       LDRH             r8, [r5], #2
+  153 000000FC DD19            BLE              celt_pitch_xcorr_edsp_process1u
+_loop4_done
+  154 000000FE F854 6B04       LDR              r6, [r4], #4
+  155 00000102 EA4F 4808       MOV              r8, r8, LSL #16
+  156 00000106         celt_pitch_xcorr_edsp_process1u_loop4
+  157 00000106 F855 9B04       LDR              r9, [r5], #4
+  158 0000010A FB16 EE18       SMLABT           r14, r6, r8, r14 ; sum = MAC16_
+                                                            16(sum, x_0, y_0)
+  159 0000010E F854 7B04       LDR              r7, [r4], #4
+  160 00000112 FB16 EE29       SMLATB           r14, r6, r9, r14 ; sum = MAC16_
+                                                            16(sum, x_1, y_1)
+  161 00000116 F855 8B04       LDR              r8, [r5], #4
+  162 0000011A FB17 EE19       SMLABT           r14, r7, r9, r14 ; sum = MAC16_
+                                                            16(sum, x_2, y_2)
+  163 0000011E F1BC 0C04       SUBS             r12, r12, #4 ; j-=4
+  164 00000122 FB17 EE28       SMLATB           r14, r7, r8, r14 ; sum = MAC16_
+                                                            16(sum, x_3, y_3)
+  165 00000126 BFC8 F854 
+              6B04             LDRGT            r6, [r4], #4
+  166 0000012C DCEB            BGT              celt_pitch_xcorr_edsp_process1u
+_loop4
+  167 0000012E EA4F 4818       MOV              r8, r8, LSR #16
+  168 00000132         celt_pitch_xcorr_edsp_process1u_loop4_done
+  169 00000132 F11C 0C04       ADDS             r12, r12, #4
+  170 00000136         celt_pitch_xcorr_edsp_process1u_loop1
+  171 00000136 BFA2 F834 
+              6B02             LDRHGE           r6, [r4], #2
+  172 0000013C         ; Stall
+  173 0000013C FB16 EE08       SMLABBGE         r14, r6, r8, r14 ; sum = MAC16_
+                                                            16(sum, *x, *y)
+  174 00000140 F1BC 0C01       SUBSGE           r12, r12, #1
+  175 00000144 BFC8 F835 
+              8B02             LDRHGT           r8, [r5], #2
+  176 0000014A DCF4            BGT              celt_pitch_xcorr_edsp_process1u
+_loop1
+  177 0000014C         ; Restore _x
+  178 0000014C EBA4 0443       SUB              r4, r4, r3, LSL #1
+  179 00000150         ; Restore and advance _y
+  180 00000150 EBA5 0543       SUB              r5, r5, r3, LSL #1
+  181 00000154         ; maxcorr = max(maxcorr, sum)
+  182 00000154 4570            CMP              r0, r14
+  183 00000156 F105 0502       ADD              r5, r5, #2
+  184 0000015A BFB8 4670       MOVLT            r0, r14
+  185 0000015E 1E49            SUBS             r1, r1, #1
+  186 00000160         ; xcorr[i] = sum
+  187 00000160 F842 EB04       STR              r14, [r2], #4
+
+
+
+ARM Macro Assembler    Page 6 
+
+
+  188 00000164 DC00            BGT              celt_pitch_xcorr_edsp_process1u
+_done
+  189 00000166 E0C0            B                celt_pitch_xcorr_edsp_done
+  190 00000168         celt_pitch_xcorr_edsp_process1u_done
+  191 00000168         ; if (max_pitch < 4) goto celt_pitch_xcorr_edsp_process2
+                       
+  192 00000168 1F09            SUBS             r1, r1, #4
+  193 0000016A DB1B            BLT              celt_pitch_xcorr_edsp_process2
+  194 0000016C         celt_pitch_xcorr_edsp_process4
+  195 0000016C         ; xcorr_kernel_edsp parameters:
+  196 0000016C         ; r3 = len, r4 = _x, r5 = _y, r6...r9 = sum[4] = {0, 0, 
+                       0, 0}
+  197 0000016C F04F 0600       MOV              r6, #0
+  198 00000170 F04F 0700       MOV              r7, #0
+  199 00000174 F04F 0800       MOV              r8, #0
+  200 00000178 F04F 0900       MOV              r9, #0
+  201 0000017C F7FF FF40       BL               xcorr_kernel_edsp_start ; xcorr
+                                                            _kernel_edsp(_x, _y
+                                                            +i, xcorr+i, len)
+  202 00000180         ; maxcorr = max(maxcorr, sum0, sum1, sum2, sum3)
+  203 00000180 42B0            CMP              r0, r6
+  204 00000182         ; _y+=4
+  205 00000182 F105 0508       ADD              r5, r5, #8
+  206 00000186 BFB8 4630       MOVLT            r0, r6
+  207 0000018A 42B8            CMP              r0, r7
+  208 0000018C BFB8 4638       MOVLT            r0, r7
+  209 00000190 4540            CMP              r0, r8
+  210 00000192 BFB8 4640       MOVLT            r0, r8
+  211 00000196 4548            CMP              r0, r9
+  212 00000198 BFB8 4648       MOVLT            r0, r9
+  213 0000019C E8A2 03C0       STMIA            r2!, {r6-r9}
+  214 000001A0 1F09            SUBS             r1, r1, #4
+  215 000001A2 DAE3            BGE              celt_pitch_xcorr_edsp_process4
+  216 000001A4         celt_pitch_xcorr_edsp_process2
+  217 000001A4 1C89            ADDS             r1, r1, #2
+  218 000001A6 DB5F            BLT              celt_pitch_xcorr_edsp_process1a
+  219 000001A8 F1B3 0C04       SUBS             r12, r3, #4
+  220 000001AC         ; {r10, r11} = {sum0, sum1} = {0, 0}
+  221 000001AC F04F 0A00       MOV              r10, #0
+  222 000001B0 F04F 0B00       MOV              r11, #0
+  223 000001B4 F855 8B04       LDR              r8, [r5], #4
+  224 000001B8 DD20            BLE              celt_pitch_xcorr_edsp_process2_
+loop_done
+  225 000001BA F854 6B04       LDR              r6, [r4], #4
+  226 000001BE F855 9B04       LDR              r9, [r5], #4
+  227 000001C2         celt_pitch_xcorr_edsp_process2_loop4
+  228 000001C2 FB16 AA08       SMLABB           r10, r6, r8, r10 ; sum0 = MAC16
+                                                            _16(sum0, x_0, y_0)
+                                                            
+  229 000001C6 F854 7B04       LDR              r7, [r4], #4
+  230 000001CA FB16 BB18       SMLABT           r11, r6, r8, r11 ; sum1 = MAC16
+                                                            _16(sum1, x_0, y_1)
+                                                            
+  231 000001CE F1BC 0C04       SUBS             r12, r12, #4 ; j-=4
+  232 000001D2 FB16 AA38       SMLATT           r10, r6, r8, r10 ; sum0 = MAC16
+                                                            _16(sum0, x_1, y_1)
+                                                            
+  233 000001D6 F855 8B04       LDR              r8, [r5], #4
+  234 000001DA FB16 BB29       SMLATB           r11, r6, r9, r11 ; sum1 = MAC16
+
+
+
+ARM Macro Assembler    Page 7 
+
+
+                                                            _16(sum1, x_1, y_2)
+                                                            
+  235 000001DE BFC8 F854 
+              6B04             LDRGT            r6, [r4], #4
+  236 000001E4 FB17 AA09       SMLABB           r10, r7, r9, r10 ; sum0 = MAC16
+                                                            _16(sum0, x_2, y_2)
+                                                            
+  237 000001E8 FB17 BB19       SMLABT           r11, r7, r9, r11 ; sum1 = MAC16
+                                                            _16(sum1, x_2, y_3)
+                                                            
+  238 000001EC FB17 AA39       SMLATT           r10, r7, r9, r10 ; sum0 = MAC16
+                                                            _16(sum0, x_3, y_3)
+                                                            
+  239 000001F0 BFC8 F855 
+              9B04             LDRGT            r9, [r5], #4
+  240 000001F6 FB17 BB28       SMLATB           r11, r7, r8, r11 ; sum1 = MAC16
+                                                            _16(sum1, x_3, y_4)
+                                                            
+  241 000001FA DCE2            BGT              celt_pitch_xcorr_edsp_process2_
+loop4
+  242 000001FC         celt_pitch_xcorr_edsp_process2_loop_done
+  243 000001FC F11C 0C02       ADDS             r12, r12, #2
+  244 00000200 DD0E            BLE              celt_pitch_xcorr_edsp_process2_
+1
+  245 00000202 F854 6B04       LDR              r6, [r4], #4
+  246 00000206         ; Stall
+  247 00000206 FB16 AA08       SMLABB           r10, r6, r8, r10 ; sum0 = MAC16
+                                                            _16(sum0, x_0, y_0)
+                                                            
+  248 0000020A F855 9B04       LDR              r9, [r5], #4
+  249 0000020E FB16 BB18       SMLABT           r11, r6, r8, r11 ; sum1 = MAC16
+                                                            _16(sum1, x_0, y_1)
+                                                            
+  250 00000212 F1AC 0C02       SUB              r12, r12, #2
+  251 00000216 FB16 AA38       SMLATT           r10, r6, r8, r10 ; sum0 = MAC16
+                                                            _16(sum0, x_1, y_1)
+                                                            
+  252 0000021A 46C8            MOV              r8, r9
+  253 0000021C FB16 BB29       SMLATB           r11, r6, r9, r11 ; sum1 = MAC16
+                                                            _16(sum1, x_1, y_2)
+                                                            
+  254 00000220         celt_pitch_xcorr_edsp_process2_1
+  255 00000220 F834 6B02       LDRH             r6, [r4], #2
+  256 00000224 F11C 0C01       ADDS             r12, r12, #1
+  257 00000228         ; Stall
+  258 00000228 FB16 AA08       SMLABB           r10, r6, r8, r10 ; sum0 = MAC16
+                                                            _16(sum0, x_0, y_0)
+                                                            
+  259 0000022C BFC8 F834 
+              7B02             LDRHGT           r7, [r4], #2
+  260 00000232 FB16 BB18       SMLABT           r11, r6, r8, r11 ; sum1 = MAC16
+                                                            _16(sum1, x_0, y_1)
+                                                            
+  261 00000236 DD05            BLE              celt_pitch_xcorr_edsp_process2_
+done
+  262 00000238 F835 9B02       LDRH             r9, [r5], #2
+  263 0000023C FB17 AA18       SMLABT           r10, r7, r8, r10 ; sum0 = MAC16
+                                                            _16(sum0, x_0, y_1)
+                                                            
+
+
+
+ARM Macro Assembler    Page 8 
+
+
+  264 00000240 FB17 BB09       SMLABB           r11, r7, r9, r11 ; sum1 = MAC16
+                                                            _16(sum1, x_0, y_2)
+                                                            
+  265 00000244         celt_pitch_xcorr_edsp_process2_done
+  266 00000244         ; Restore _x
+  267 00000244 EBA4 0443       SUB              r4, r4, r3, LSL #1
+  268 00000248         ; Restore and advance _y
+  269 00000248 EBA5 0543       SUB              r5, r5, r3, LSL #1
+  270 0000024C         ; maxcorr = max(maxcorr, sum0)
+  271 0000024C 4550            CMP              r0, r10
+  272 0000024E F105 0502       ADD              r5, r5, #2
+  273 00000252 BFB8 4650       MOVLT            r0, r10
+  274 00000256 F1A1 0102       SUB              r1, r1, #2
+  275 0000025A         ; maxcorr = max(maxcorr, sum1)
+  276 0000025A 4558            CMP              r0, r11
+  277 0000025C         ; xcorr[i] = sum
+  278 0000025C F842 AB04       STR              r10, [r2], #4
+  279 00000260 BFB8 4658       MOVLT            r0, r11
+  280 00000264 F842 BB04       STR              r11, [r2], #4
+  281 00000268         celt_pitch_xcorr_edsp_process1a
+  282 00000268 1C49            ADDS             r1, r1, #1
+  283 0000026A DB3E            BLT              celt_pitch_xcorr_edsp_done
+  284 0000026C F1B3 0C04       SUBS             r12, r3, #4
+  285 00000270         ; r14 = sum = 0
+  286 00000270 F04F 0E00       MOV              r14, #0
+  287 00000274 DB1D            BLT              celt_pitch_xcorr_edsp_process1a
+_loop_done
+  288 00000276 F854 6B04       LDR              r6, [r4], #4
+  289 0000027A F855 8B04       LDR              r8, [r5], #4
+  290 0000027E F854 7B04       LDR              r7, [r4], #4
+  291 00000282 F855 9B04       LDR              r9, [r5], #4
+  292 00000286         celt_pitch_xcorr_edsp_process1a_loop4
+  293 00000286 FB16 EE08       SMLABB           r14, r6, r8, r14 ; sum = MAC16_
+                                                            16(sum, x_0, y_0)
+  294 0000028A F1BC 0C04       SUBS             r12, r12, #4 ; j-=4
+  295 0000028E FB16 EE38       SMLATT           r14, r6, r8, r14 ; sum = MAC16_
+                                                            16(sum, x_1, y_1)
+  296 00000292 BFA8 F854 
+              6B04             LDRGE            r6, [r4], #4
+  297 00000298 FB17 EE09       SMLABB           r14, r7, r9, r14 ; sum = MAC16_
+                                                            16(sum, x_2, y_2)
+  298 0000029C BFA8 F855 
+              8B04             LDRGE            r8, [r5], #4
+  299 000002A2 FB17 EE39       SMLATT           r14, r7, r9, r14 ; sum = MAC16_
+                                                            16(sum, x_3, y_3)
+  300 000002A6 BFA4 F854 
+              7B04             LDRGE            r7, [r4], #4
+  301 000002AC F855 9B04       LDRGE            r9, [r5], #4
+  302 000002B0 DAE9            BGE              celt_pitch_xcorr_edsp_process1a
+_loop4
+  303 000002B2         celt_pitch_xcorr_edsp_process1a_loop_done
+  304 000002B2 F11C 0C02       ADDS             r12, r12, #2
+  305 000002B6 BFA1 F854 
+              6B04             LDRGE            r6, [r4], #4
+  306 000002BC F855 8B04       LDRGE            r8, [r5], #4
+  307 000002C0         ; Stall
+  308 000002C0 FB16 EE08       SMLABBGE         r14, r6, r8, r14 ; sum = MAC16_
+                                                            16(sum, x_0, y_0)
+  309 000002C4 F1AC 0C02       SUBGE            r12, r12, #2
+
+
+
+ARM Macro Assembler    Page 9 
+
+
+  310 000002C8 BFA8 FB16 
+              EE38             SMLATTGE         r14, r6, r8, r14 ; sum = MAC16_
+                                                            16(sum, x_1, y_1)
+  311 000002CE F11C 0C01       ADDS             r12, r12, #1
+  312 000002D2 BFA2 F834 
+              6B02             LDRHGE           r6, [r4], #2
+  313 000002D8 F835 8B02       LDRHGE           r8, [r5], #2
+  314 000002DC         ; Stall
+  315 000002DC FB16 EE08       SMLABBGE         r14, r6, r8, r14 ; sum = MAC16_
+                                                            16(sum, *x, *y)
+  316 000002E0         ; maxcorr = max(maxcorr, sum)
+  317 000002E0 4570            CMP              r0, r14
+  318 000002E2         ; xcorr[i] = sum
+  319 000002E2 F842 EB04       STR              r14, [r2], #4
+  320 000002E6 BFB8 4670       MOVLT            r0, r14
+  321 000002EA         celt_pitch_xcorr_edsp_done
+  322 000002EA E8BD 8FF0       LDMFD            sp!, {r4-r11, pc}
+  323 000002EE                 ENDP
+  324 000002EE         
+  325 000002EE                 END
+Command Line: --debug --xref --cpreproc --diag_suppress=9931 --cpu=Cortex-M4.fp
+ --apcs=interwork --depend=.\_build\celt_pitch_xcorr_arm_keil.d -o.\_build\celt
+_pitch_xcorr_arm_keil.o -I..\..\..\Source\Bootloader -I..\..\..\Source\Common -
+I..\..\..\Source\Configuration -I..\..\..\Source\Debug -I..\..\..\Source\Driver
+s -I..\..\..\Source\Libraries -I..\..\..\Source\Libraries\bv32fp-1.2 -I..\..\..
+\Source\Libraries\opus-1.2.1 -I..\..\..\Source\Libraries\sbc-0025\include -I..\
+..\..\Source\Modules -I..\..\..\..\..\..\components\ble\ble_services\ble_bas -I
+..\..\..\..\..\..\components\ble\ble_services\ble_dis -I..\..\..\..\..\..\compo
+nents\ble\ble_services\ble_hids -I..\..\..\..\..\..\components\ble\ble_services
+\ble_ias -I..\..\..\..\..\..\components\ble\ble_services\ble_nus -I..\..\..\..\
+..\..\components\ble\common -I..\..\..\..\..\..\components\ble\nrf_ble_gatt -I.
+.\..\..\..\..\..\components\ble\peer_manager -I..\..\..\..\..\..\components\dri
+vers_nrf\ble_flash -I..\..\..\..\..\..\components\drivers_nrf\clock -I..\..\..\
+..\..\..\components\drivers_nrf\common -I..\..\..\..\..\..\components\drivers_n
+rf\delay -I..\..\..\..\..\..\components\drivers_nrf\gpiote -I..\..\..\..\..\..\
+components\drivers_nrf\hal -I..\..\..\..\..\..\components\drivers_nrf\pdm -I..\
+..\..\..\..\..\components\drivers_nrf\ppi -I..\..\..\..\..\..\components\driver
+s_nrf\pwm -I..\..\..\..\..\..\components\drivers_nrf\rng -I..\..\..\..\..\..\co
+mponents\drivers_nrf\saadc -I..\..\..\..\..\..\components\drivers_nrf\twi_maste
+r -I..\..\..\..\..\..\components\drivers_nrf\uart -I..\..\..\..\..\..\component
+s\drivers_nrf\wdt -I..\..\..\..\..\..\components\libraries\atomic -I..\..\..\..
+\..\..\components\libraries\atomic_fifo -I..\..\..\..\..\..\components\librarie
+s\balloc -I..\..\..\..\..\..\components\libraries\cli -I..\..\..\..\..\..\compo
+nents\libraries\cli\ble_uart -I..\..\..\..\..\..\components\libraries\cli\rtt -
+I..\..\..\..\..\..\components\libraries\cli\uart -I..\..\..\..\..\..\components
+\libraries\crc16 -I..\..\..\..\..\..\components\libraries\crc32 -I..\..\..\..\.
+.\..\components\libraries\crypto -I..\..\..\..\..\..\components\libraries\crypt
+o\backend\cc310_lib -I..\..\..\..\..\..\components\libraries\crypto\backend\mic
+ro_ecc -I..\..\..\..\..\..\components\libraries\crypto\backend\nrf_crypto_sw -I
+..\..\..\..\..\..\components\libraries\ecc -I..\..\..\..\..\..\components\libra
+ries\experimental_log -I..\..\..\..\..\..\components\libraries\experimental_log
+\src -I..\..\..\..\..\..\components\libraries\experimental_memobj -I..\..\..\..
+\..\..\components\libraries\experimental_mpu -I..\..\..\..\..\..\components\lib
+raries\experimental_ringbuf -I..\..\..\..\..\..\components\libraries\experiment
+al_section_vars -I..\..\..\..\..\..\components\libraries\experimental_stack_gua
+rd -I..\..\..\..\..\..\components\libraries\experimental_task_manager -I..\..\.
+.\..\..\..\components\libraries\fds -I..\..\..\..\..\..\components\libraries\fs
+torage -I..\..\..\..\..\..\components\libraries\gpiote -I..\..\..\..\..\..\comp
+onents\libraries\hardfault -I..\..\..\..\..\..\components\libraries\hardfault\n
+
+
+
+ARM Macro Assembler    Page 10 
+
+
+rf52 -I..\..\..\..\..\..\components\libraries\mem_manager -I..\..\..\..\..\..\c
+omponents\libraries\mutex -I..\..\..\..\..\..\components\libraries\pwr_mgmt -I.
+.\..\..\..\..\..\components\libraries\queue -I..\..\..\..\..\..\components\libr
+aries\sha256 -I..\..\..\..\..\..\components\libraries\strerror -I..\..\..\..\..
+\..\components\libraries\svc -I..\..\..\..\..\..\components\libraries\timer -I.
+.\..\..\..\..\..\components\libraries\twi_mngr -I..\..\..\..\..\..\components\l
+ibraries\util -I..\..\..\..\..\..\components\nfc\ndef\connection_handover\ac_re
+c -I..\..\..\..\..\..\components\nfc\ndef\connection_handover\ble_oob_advdata -
+I..\..\..\..\..\..\components\nfc\ndef\connection_handover\ble_pair_msg -I..\..
+\..\..\..\..\components\nfc\ndef\connection_handover\common -I..\..\..\..\..\..
+\components\nfc\ndef\connection_handover\ep_oob_rec -I..\..\..\..\..\..\compone
+nts\nfc\ndef\connection_handover\hs_rec -I..\..\..\..\..\..\components\nfc\ndef
+\connection_handover\le_oob_rec -I..\..\..\..\..\..\components\nfc\ndef\generic
+\message -I..\..\..\..\..\..\components\nfc\ndef\generic\record -I..\..\..\..\.
+.\..\components\nfc\ndef\text -I..\..\..\..\..\..\components\nfc\t2t_lib -I..\.
+.\..\..\..\..\components\nfc\t2t_lib\hal_t2t -I..\..\..\..\..\..\components\sof
+tdevice\common -I..\..\..\..\..\..\components\softdevice\s132\headers -I..\..\.
+.\..\..\..\components\softdevice\s132\headers\nrf52 -I..\..\..\..\..\..\compone
+nts\toolchain -I..\..\..\..\..\..\external\fprintf -I..\..\..\..\..\..\external
+\micro-ecc\micro-ecc -I..\..\..\..\..\..\external\nrf_cc310\include -I..\..\..\
+..\..\..\external\segger_rtt -I..\config -I.\RTE\_CUSTOM-SR3_nRF52832_Custom_Bo
+ard -IC:\Keil_v5\ARM\PACK\ARM\CMSIS\4.5.0\CMSIS\Include -IC:\Keil_v5\ARM\PACK\N
+ordicSemiconductor\nRF_DeviceFamilyPack\8.15.0\Device\Include --predefine="__MI
+CROLIB SETA 1" --predefine="__UVISION_VERSION SETA 525" --predefine="_RTE_ SETA
+ 1" --predefine="NRF52 SETA 1" --predefine="APP_SCHEDULER_ENABLED SETA 1" --pre
+define="ARM_MATH_CM4 SETA 1" --predefine="BLE_STACK_SUPPORT_REQD SETA 1" --pred
+efine="CONFIG_BOARD_NRF52832_CUSTOM SETA 1" --predefine="DISABLE_FLOAT_API SETA
+ 1" --predefine="ENABLE_ASSERTIONS SETA 1" --predefine="FIXED_POINT SETA 1" --p
+redefine="FLOAT_ABI_HARD SETA 1" --predefine="HAL_NFC_ENGINEERING_BC_FTPAN_WORK
+AROUND SETA 1" --predefine="HAVE_ALLOCA_H SETA 1" --predefine="HAVE_LRINT SETA 
+1" --predefine="HAVE_LRINTF SETA 1" --predefine="NRF52 SETA 1" --predefine="NRF
+52832_XXAA SETA 1" --predefine="NRF_SD_BLE_API_VERSION SETA 5" --predefine="OPU
+S_ARM_ASM SETA 1" --predefine="OPUS_ARM_INLINE_ASM SETA 1" --predefine="OPUS_AR
+M_INLINE_EDSP SETA 1" --predefine="OPUS_ARM_INLINE_MEDIA SETA 1" --predefine="O
+PUS_ARM_MAY_HAVE_EDSP SETA 1" --predefine="OPUS_ARM_PRESUME_EDSP SETA 1" --pred
+efine="OPUS_BUILD SETA 1" --predefine="S132 SETA 1" --predefine="SOFTDEVICE_PRE
+SENT SETA 1" --predefine="SWI_DISABLE0 SETA 1" --predefine="USE_ALLOCA SETA 1" 
+--predefine="USE_APP_CONFIG SETA 1" --predefine="__STARTUP_CONFIG SETA 1" --cpr
+eproc_opts=-D__ASSEMBLER__,-DCONFIG_BOARD_NRF52832_CUSTOM --list=.\_build\celt_
+pitch_xcorr_arm_keil.lst ..\..\..\Source\Libraries\opus-1.2.1\arm\celt_pitch_xc
+orr_arm_keil.s
+
+
+
+ARM Macro Assembler    Page 1 Alphabetic symbol ordering
+Relocatable symbols
+
+.text 00000000
+
+Symbol: .text
+   Definitions
+      At line 29 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_p
+itch_xcorr_arm_keil.s
+   Uses
+      None
+Comment: .text unused
+celt_pitch_xcorr_edsp 000000DC
+
+Symbol: celt_pitch_xcorr_edsp
+   Definitions
+      At line 119 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 31 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_p
+itch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp used once
+celt_pitch_xcorr_edsp_done 000002EA
+
+Symbol: celt_pitch_xcorr_edsp_done
+   Definitions
+      At line 321 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 189 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+      At line 283 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+
+celt_pitch_xcorr_edsp_process1a 00000268
+
+Symbol: celt_pitch_xcorr_edsp_process1a
+   Definitions
+      At line 281 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 218 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process1a used once
+celt_pitch_xcorr_edsp_process1a_loop4 00000286
+
+Symbol: celt_pitch_xcorr_edsp_process1a_loop4
+   Definitions
+      At line 292 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 302 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process1a_loop4 used once
+celt_pitch_xcorr_edsp_process1a_loop_done 000002B2
+
+Symbol: celt_pitch_xcorr_edsp_process1a_loop_done
+   Definitions
+      At line 303 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 287 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+
+
+
+ARM Macro Assembler    Page 2 Alphabetic symbol ordering
+Relocatable symbols
+
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process1a_loop_done used once
+celt_pitch_xcorr_edsp_process1u_done 00000168
+
+Symbol: celt_pitch_xcorr_edsp_process1u_done
+   Definitions
+      At line 190 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 147 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+      At line 188 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+
+celt_pitch_xcorr_edsp_process1u_loop1 00000136
+
+Symbol: celt_pitch_xcorr_edsp_process1u_loop1
+   Definitions
+      At line 170 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 176 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process1u_loop1 used once
+celt_pitch_xcorr_edsp_process1u_loop4 00000106
+
+Symbol: celt_pitch_xcorr_edsp_process1u_loop4
+   Definitions
+      At line 156 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 166 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process1u_loop4 used once
+celt_pitch_xcorr_edsp_process1u_loop4_done 00000132
+
+Symbol: celt_pitch_xcorr_edsp_process1u_loop4_done
+   Definitions
+      At line 168 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 153 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process1u_loop4_done used once
+celt_pitch_xcorr_edsp_process2 000001A4
+
+Symbol: celt_pitch_xcorr_edsp_process2
+   Definitions
+      At line 216 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 193 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process2 used once
+celt_pitch_xcorr_edsp_process2_1 00000220
+
+Symbol: celt_pitch_xcorr_edsp_process2_1
+   Definitions
+      At line 254 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+
+
+
+ARM Macro Assembler    Page 3 Alphabetic symbol ordering
+Relocatable symbols
+
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 244 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process2_1 used once
+celt_pitch_xcorr_edsp_process2_done 00000244
+
+Symbol: celt_pitch_xcorr_edsp_process2_done
+   Definitions
+      At line 265 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 261 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process2_done used once
+celt_pitch_xcorr_edsp_process2_loop4 000001C2
+
+Symbol: celt_pitch_xcorr_edsp_process2_loop4
+   Definitions
+      At line 227 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 241 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process2_loop4 used once
+celt_pitch_xcorr_edsp_process2_loop_done 000001FC
+
+Symbol: celt_pitch_xcorr_edsp_process2_loop_done
+   Definitions
+      At line 242 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 224 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process2_loop_done used once
+celt_pitch_xcorr_edsp_process4 0000016C
+
+Symbol: celt_pitch_xcorr_edsp_process4
+   Definitions
+      At line 194 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 215 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: celt_pitch_xcorr_edsp_process4 used once
+xcorr_kernel_edsp 00000000
+
+Symbol: xcorr_kernel_edsp
+   Definitions
+      At line 33 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_p
+itch_xcorr_arm_keil.s
+   Uses
+      None
+Comment: xcorr_kernel_edsp unused
+xcorr_kernel_edsp_done 000000DA
+
+Symbol: xcorr_kernel_edsp_done
+   Definitions
+      At line 115 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+
+
+
+ARM Macro Assembler    Page 4 Alphabetic symbol ordering
+Relocatable symbols
+
+pitch_xcorr_arm_keil.s
+   Uses
+      At line 84 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_p
+itch_xcorr_arm_keil.s
+      At line 93 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_p
+itch_xcorr_arm_keil.s
+      At line 101 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+      At line 109 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+
+xcorr_kernel_edsp_process4 00000012
+
+Symbol: xcorr_kernel_edsp_process4
+   Definitions
+      At line 56 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_p
+itch_xcorr_arm_keil.s
+   Uses
+      At line 81 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_p
+itch_xcorr_arm_keil.s
+Comment: xcorr_kernel_edsp_process4 used once
+xcorr_kernel_edsp_process4_done 00000068
+
+Symbol: xcorr_kernel_edsp_process4_done
+   Definitions
+      At line 82 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_p
+itch_xcorr_arm_keil.s
+   Uses
+      At line 53 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_p
+itch_xcorr_arm_keil.s
+Comment: xcorr_kernel_edsp_process4_done used once
+xcorr_kernel_edsp_start 00000000
+
+Symbol: xcorr_kernel_edsp_start
+   Definitions
+      At line 34 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_p
+itch_xcorr_arm_keil.s
+   Uses
+      At line 201 in file ..\\..\\..\\Source\\Libraries\\opus-1.2.1\\arm\\celt_
+pitch_xcorr_arm_keil.s
+Comment: xcorr_kernel_edsp_start used once
+21 symbols
+383 symbols in table

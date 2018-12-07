@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "nrf_cli.h": "c",
+        "nrf_cli_ble_uart.h": "c"
+    }
+}
